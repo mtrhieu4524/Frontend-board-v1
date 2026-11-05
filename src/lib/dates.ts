@@ -20,3 +20,9 @@ export function daysAgo(days: number, today = new Date()): string {
   const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - days));
   return date.toISOString().slice(0, 10);
 }
+
+/** Add (or subtract) calendar days to a YYYY-MM-DD date. */
+export function addDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
