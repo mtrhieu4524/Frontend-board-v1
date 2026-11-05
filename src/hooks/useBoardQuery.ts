@@ -6,6 +6,7 @@ import {
   serializeQuery,
   type BoardQuery,
 } from "@/lib/query";
+import { keepPreview } from "@/lib/preview";
 
 type Range = { from: string; to: string };
 
@@ -29,7 +30,10 @@ export function useBoardQuery(fallbackRange: Range | null) {
 
   useEffect(() => {
     if (!active) return;
-    const next = serializeQuery(query, from && to ? { from, to } : null);
+    const next = keepPreview(
+      search,
+      serializeQuery(query, from && to ? { from, to } : null),
+    );
     if (next !== search) navigate({ pathname, search: next }, { replace: true });
   }, [active, query, pathname, search, from, to, navigate]);
 
@@ -40,12 +44,15 @@ export function useBoardQuery(fallbackRange: Range | null) {
       navigate(
         {
           pathname,
-          search: serializeQuery(next, from && to ? { from, to } : null),
+          search: keepPreview(
+            search,
+            serializeQuery(next, from && to ? { from, to } : null),
+          ),
         },
         { replace: true },
       );
     },
-    [query, pathname, from, to, navigate],
+    [query, pathname, search, from, to, navigate],
   );
 
   return { query, update, range };

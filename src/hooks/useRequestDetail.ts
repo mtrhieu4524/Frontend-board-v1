@@ -21,10 +21,15 @@ export function useRequestDetail(id: number): RequestDetailState {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!configured()) return;
-    let cancelled = false;
     setRequest(null);
     setEvents([]);
+    setNotFound(false);
+    setError(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!configured()) return;
+    let cancelled = false;
     setLoading(true);
     setNotFound(false);
     setError(null);

@@ -16,9 +16,14 @@ import type { Change, HelpdeskRequest, Site, Staff, Status } from "@/types";
 const HIGHLIGHT_MS = 8_000;
 
 export function describeError(e: unknown): string {
-  if (e instanceof ApiError)
-    return e.status ? `${e.status}: ${e.message}` : e.message;
-  return String(e);
+  if (e instanceof ApiError) {
+    if (e.status === 429) return "The helpdesk is busy right now";
+    if (e.status >= 500) return "The helpdesk is temporarily unavailable";
+    if (e.status === 401 || e.status === 403)
+      return "The helpdesk refused the access token";
+    return e.status ? `${e.message} (${e.status})` : e.message;
+  }
+  return "Something unexpected went wrong";
 }
 
 export interface Reference {
@@ -94,6 +99,7 @@ export function useRequests(
   } | null>(null);
 
   const current = useRef<HelpdeskRequest[]>([]);
+  const lastScope = useRef("");
   const scope = useRef<{
     from: string;
     to: string;
@@ -146,8 +152,14 @@ export function useRequests(
     if (!enabled || !configured() || !from || !to || !sites) return;
     let cancelled = false;
     const zones = new Map(sites.map((s) => [s.id, s.timezone]));
+    const scopeKey = `${from}|${to}|${sites.map((s) => s.id).join(",")}`;
     scope.current = { from, to, zones };
     buffered.current = [];
+    if (lastScope.current !== scopeKey) {
+      commit([]);
+      setLoadedAt(null);
+      lastScope.current = scopeKey;
+    }
     loadingRef.current = true;
     setLoading(true);
     setError(null);
@@ -172,7 +184,8 @@ export function useRequests(
         setLoadedAt(new Date());
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(describeError(e));
+        if (cancelled) return;
+        setError(describeError(e));
       })
       .finally(() => {
         if (!cancelled) {

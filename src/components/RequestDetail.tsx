@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { EventTimeline } from "@/components/EventTimeline";
 import { PriorityBadge, StatusBadge } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRequestDetail } from "@/hooks/useRequestDetail";
+import { AUTO_RETRY_MS, useRetrying } from "@/hooks/useRetrying";
+import { parsePreview } from "@/lib/preview";
 import { firstResponse, formatEventTime, formatInZone, formatLocalDate, isOverdue, sortEventsOldestFirst, undoneEventIds } from "@/lib/rules";
 import type { HelpdeskRequest, Site, Staff, Status } from "@/types";
 
@@ -22,9 +24,26 @@ interface Props {
 }
 
 export function RequestDetail({ id, sites, staff, statusLabels, referenceReady, referenceError, onRetryReference, backHref, now = new Date() }: Props) {
-  const { request, events, loading, notFound, error, retry } = useRequestDetail(id);
+  const preview = parsePreview(useLocation().search);
+  const detail = useRequestDetail(id);
   const [showUndone, setShowUndone] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const waiting = useRetrying();
+  const request = preview === "empty" ? null : detail.request;
+  const events = detail.events;
+  const notFound = preview === "empty" || detail.notFound;
+  const error =
+    preview === "error"
+      ? "The helpdesk refused the access token"
+      : preview === "down"
+        ? "The helpdesk is temporarily unavailable"
+        : preview
+          ? null
+          : detail.error;
+  const loading =
+    preview === "loading" || preview === "busy" || (!preview && detail.loading);
+  const retry = detail.retry;
+  const retrying = preview === "busy" || waiting;
 
   useEffect(() => {
     heading.current?.focus();
@@ -44,36 +63,75 @@ export function RequestDetail({ id, sites, staff, statusLabels, referenceReady, 
   const undoneIds = useMemo(() => undoneEventIds(events), [events]);
   const first = useMemo(() => firstResponse(events), [events]);
   const shown = showUndone ? ordered : ordered.filter((e) => !undoneIds.has(e.id));
-  const failure = error ?? referenceError;
-  const busy = !failure && !notFound && (loading || !referenceReady);
+  const failure = error ?? (preview ? null : referenceError);
+  const showSkeleton =
+    (preview === "loading" || preview === "busy" || !request) &&
+    !failure &&
+    !notFound &&
+    (loading || !referenceReady);
+  const showBody =
+    Boolean(request) &&
+    referenceReady &&
+    (preview === null || preview === "down");
+
+  useEffect(() => {
+    if (!failure || preview) return;
+    const timer = setTimeout(() => {
+      if (error) retry();
+      else onRetryReference();
+    }, AUTO_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [failure, preview, error, retry, onRetryReference]);
 
   return (
-    <main className="mx-auto max-w-4xl p-4">
-      <Link to={backHref} className="text-sm underline-offset-2 hover:underline focus-visible:underline">
+    <main className="mx-auto max-w-4xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <Link
+        to={backHref}
+        className="inline-flex rounded-sm text-sm underline-offset-2 outline-none hover:underline focus-visible:underline focus-visible:ring-3 focus-visible:ring-ring/60">
         ← Back to the board
       </Link>
       <h1 ref={heading} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
         {request ? `${request.ref}: ${request.title}` : `Request #${id}`}
       </h1>
 
-      {busy && <DetailSkeleton />}
-
-      {notFound && (
-        <p role="alert" className="mt-4 rounded-md border p-3">
-          There is no request #{id}. It may have been removed, or the link is wrong.
+      {showSkeleton && <DetailSkeleton slow={retrying} />}
+      {request && !showSkeleton && retrying && (
+        <p
+          role="status"
+          className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          The helpdesk is slow to answer. Retrying automatically…
         </p>
       )}
 
+      {notFound && (
+        <div role="alert" className="mt-4 rounded-md border p-3">
+          <p>There is no request #{id}. It may have been removed, or the link is wrong.</p>
+          <Link
+            to={backHref}
+            className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm underline-offset-2 outline-none hover:underline focus-visible:underline focus-visible:ring-3 focus-visible:ring-ring/60 sm:min-h-0">
+            Back to the board
+          </Link>
+        </div>
+      )}
+
       {failure && (
-        <div role="alert" className="mt-4 flex items-center justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <span>Could not load this request: {failure}</span>
-          <Button size="sm" variant="outline" onClick={error ? retry : onRetryReference}>
+        <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <span>
+            Could not load this request. {failure}.
+            {request ? " Showing the last data received." : null} We will try
+            again in a few seconds.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-h-11 sm:min-h-7"
+            onClick={error ? retry : onRetryReference}>
             Try again
           </Button>
         </div>
       )}
 
-      {request && !busy && (
+      {showBody && request && (
         <>
           <Notices request={request} knownSite={Boolean(site)} />
           <p className="mt-2 text-sm text-muted-foreground">
@@ -122,7 +180,7 @@ export function RequestDetail({ id, sites, staff, statusLabels, referenceReady, 
               </h2>
               {undoneIds.size > 0 && (
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={showUndone} onChange={(e) => setShowUndone(e.target.checked)} className="size-4" />
+                  <input type="checkbox" checked={showUndone} onChange={(e) => setShowUndone(e.target.checked)} className="size-5 sm:size-4" />
                   Show undone events ({undoneIds.size})
                 </label>
               )}
@@ -167,9 +225,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function DetailSkeleton() {
+function DetailSkeleton({ slow }: { slow: boolean }) {
   return (
     <div role="status" aria-label="Loading request" className="mt-4 grid gap-3">
+      {slow && <p className="text-sm text-amber-800">The helpdesk is slow to answer. Retrying automatically…</p>}
       <Skeleton className="h-4 w-1/2" />
       <Skeleton className="h-4 w-2/3" />
       <Skeleton className="h-24 w-full" />

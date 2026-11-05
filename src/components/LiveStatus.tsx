@@ -75,7 +75,7 @@ export function LiveStatus({
               aria-hidden="true"
               className={cn(
                 "size-1.5 rounded-full",
-                live ? "bg-green-500" : "animate-pulse bg-amber-500",
+                live ? "bg-green-500" : "animate-pulse bg-amber-500 motion-reduce:animate-none",
               )}
             />
             {LABELS[status]}
@@ -110,12 +110,13 @@ export function LiveStatus({
         <Button
           size="sm"
           variant="outline"
+          className="min-h-11 sm:min-h-7"
           disabled={!canRefresh || refreshing}
           aria-busy={refreshing}
           onClick={handleRefresh}>
           <RefreshCw
             aria-hidden="true"
-            className={cn("size-3.5", refreshing && "animate-spin")}
+            className={cn("size-3.5", refreshing && "animate-spin motion-reduce:animate-none")}
           />
           {refreshing ? "Refreshing…" : "Refresh now"}
         </Button>
@@ -124,8 +125,7 @@ export function LiveStatus({
         <p
           role="alert"
           className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
-          Could not reach the helpdesk ({error}). Showing the last data
-          received; retrying automatically.
+          {error}. Showing the last data received; retrying automatically.
         </p>
       )}
       <span role="status" className="sr-only">
