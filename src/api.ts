@@ -1,6 +1,6 @@
 // A thin client for the helpdesk API. Extend it; don't scatter fetch calls through components.
 
-import type { HelpdeskRequest, Page, RequestEvent, Site, Staff, Status } from "./types";
+import type { ChangesPage, HelpdeskRequest, Page, RequestEvent, Site, Staff, Status } from "./types";
 
 const BASE = (import.meta.env.HELPDESK_URL ?? "").replace(/\/$/, "");
 const TOKEN = import.meta.env.HELPDESK_TOKEN ?? "";
@@ -74,3 +74,5 @@ export const listSites = () => get<{ data: Site[] }>("/v1/sites");
 export const listStaff = () => get<{ data: Staff[] }>("/v1/staff");
 
 export const listStatuses = () => get<{ data: { value: Status; label: string }[] }>("/v1/statuses");
+
+export const listChanges = (cursor?: string, limit = 500) => get<ChangesPage>("/v1/changes", { cursor, limit });

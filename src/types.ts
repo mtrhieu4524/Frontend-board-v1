@@ -51,3 +51,14 @@ export interface Page<T> {
   total?: number;
   has_more?: boolean;
 }
+
+export type Change =
+  | { seq: number; type: "request.created" | "request.updated"; at: string; request: HelpdeskRequest }
+  | { seq: number; type: "event.created"; at: string; request_id: number; event: RequestEvent }
+  | { seq: number; type: "staff.updated"; at: string; staff: Staff };
+
+export interface ChangesPage {
+  data: Change[];
+  next_cursor: string;
+  has_more: boolean;
+}

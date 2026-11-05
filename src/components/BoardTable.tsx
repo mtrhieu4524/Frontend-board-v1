@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatInZone, formatLocalDate, isOverdue } from "@/lib/rules";
+import { cn } from "@/lib/utils";
 import type { HelpdeskRequest, Site, Staff, Status } from "@/types";
 
 const COLUMNS = ["Site", "Ref", "Title", "Priority", "Status", "Assignee", "Created", "Due"];
@@ -16,10 +17,11 @@ interface Props {
   loading: boolean;
   failed?: boolean;
   hrefFor: (request: HelpdeskRequest) => string;
+  highlighted?: ReadonlySet<number>;
   now?: Date;
 }
 
-export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, hrefFor, now = new Date() }: Props) {
+export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, hrefFor, highlighted, now = new Date() }: Props) {
   const navigate = useNavigate();
   return (
     <Table>
@@ -50,7 +52,7 @@ export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, 
               return (
                 <TableRow
                   key={r.id}
-                  className="cursor-pointer"
+                  className={cn("cursor-pointer", highlighted?.has(r.id) && "bg-amber-50")}
                   onClick={(e) => {
                     if (!(e.target as HTMLElement).closest("a")) navigate(href);
                   }}>
