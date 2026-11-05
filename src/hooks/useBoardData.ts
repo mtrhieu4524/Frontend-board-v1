@@ -44,14 +44,14 @@ export function useReference() {
  * All requests created in [from, to] (site-local dates, rule 1).
  * The API filters on UTC dates, so we ask for one extra day on each side and filter locally per site.
  */
-export function useRequests(from: string | null, to: string | null, sites: Site[] | undefined) {
+export function useRequests(from: string | null, to: string | null, sites: Site[] | undefined, enabled = true) {
   const [requests, setRequests] = useState<HelpdeskRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!configured() || !from || !to || !sites) return;
+    if (!enabled || !configured() || !from || !to || !sites) return;
     let cancelled = false;
     const zones = new Map(sites.map((s) => [s.id, s.timezone]));
     setLoading(true);
@@ -78,7 +78,7 @@ export function useRequests(from: string | null, to: string | null, sites: Site[
     return () => {
       cancelled = true;
     };
-  }, [from, to, sites, attempt]);
+  }, [from, to, sites, attempt, enabled]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   return { requests, loading, error, retry };

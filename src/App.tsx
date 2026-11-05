@@ -1,15 +1,31 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Navigate, Route, Routes, useMatch, useParams } from "react-router-dom";
 import { configured } from "./api";
 import { BoardTable } from "./components/BoardTable";
 import { Filters } from "./components/Filters";
 import { Pagination } from "./components/Pagination";
+import { RequestDetail } from "./components/RequestDetail";
 import { Button } from "./components/ui/button";
 import { useReference, useRequests } from "./hooks/useBoardData";
 import { useBoardQuery } from "./hooks/useBoardQuery";
 import { defaultRange } from "./lib/range";
-import { filterRows, paginate, sortRows } from "./lib/query";
+import {
+  BOARD_PATH,
+  filterRows,
+  paginate,
+  serializeQuery,
+  sortRows,
+} from "./lib/query";
+import { requestPath } from "./lib/route";
+
+function RequestRoute(props: Omit<ComponentProps<typeof RequestDetail>, "id">) {
+  const { id } = useParams();
+  if (!id || !/^\d+$/.test(id)) return <Navigate to={props.backHref} replace />;
+  return <RequestDetail id={Number(id)} {...props} />;
+}
 
 export default function App() {
+  const onRequestPage = useMatch("/requests/:id") !== null;
   const {
     reference,
     error: referenceError,
@@ -21,12 +37,20 @@ export default function App() {
     [reference],
   );
   const { query, update, range } = useBoardQuery(fallbackRange);
+
+  const [boardOpened, setBoardOpened] = useState(!onRequestPage);
+  if (!onRequestPage && !boardOpened) setBoardOpened(true);
   const {
     requests,
     loading,
     error,
     retry: retryRequests,
-  } = useRequests(range?.from ?? null, range?.to ?? null, reference?.sites);
+  } = useRequests(
+    range?.from ?? null,
+    range?.to ?? null,
+    reference?.sites,
+    boardOpened,
+  );
 
   const sites = useMemo(
     () => new Map((reference?.sites ?? []).map((s) => [s.id, s])),
@@ -67,9 +91,12 @@ export default function App() {
     );
   }
 
+  const search = serializeQuery(query, range);
+
+  const backHref = `${BOARD_PATH}${search}`;
   const failure = referenceError ?? error;
 
-  return (
+  const board = (
     <main className="mx-auto max-w-7xl p-4">
       <h1 className="text-2xl font-semibold">Requests board</h1>
       <Filters
@@ -79,9 +106,6 @@ export default function App() {
         statusLabels={statusLabels}
         onChange={update}
       />
-      <p className="mb-2 text-sm text-muted-foreground">
-        {busy ? "" : `Showing ${rows.length} of ${requests.length} requests.`}
-      </p>
       {failure && (
         <div
           role="alert"
@@ -102,6 +126,7 @@ export default function App() {
         statusLabels={statusLabels}
         loading={busy}
         failed={Boolean(failure)}
+        hrefFor={(r) => `${requestPath(r.id)}${search}`}
       />
       {!busy && !failure && rows.length > 0 && (
         <Pagination
@@ -114,5 +139,26 @@ export default function App() {
         />
       )}
     </main>
+  );
+
+  return (
+    <Routes>
+      <Route path={BOARD_PATH} element={board} />
+      <Route
+        path="/requests/:id"
+        element={
+          <RequestRoute
+            sites={sites}
+            staff={staff}
+            statusLabels={statusLabels}
+            referenceReady={Boolean(reference)}
+            referenceError={referenceError}
+            onRetryReference={retryReference}
+            backHref={backHref}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to={backHref} replace />} />
+    </Routes>
   );
 }

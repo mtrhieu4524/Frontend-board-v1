@@ -1,22 +1,10 @@
+import { Link, useNavigate } from "react-router-dom";
+import { PriorityBadge, StatusBadge } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatInZone, formatLocalDate, isOverdue } from "@/lib/rules";
-import { cn } from "@/lib/utils";
-import type { HelpdeskRequest, Priority, Site, Staff, Status } from "@/types";
-
-const PRIORITY_STYLES: Record<NonNullable<Priority>, string> = {
-  High: "border-red-200 bg-red-50 text-red-700",
-  Medium: "border-amber-200 bg-amber-50 text-amber-700",
-  Low: "border-slate-200 bg-slate-50 text-slate-600",
-};
-
-const STATUS_STYLES: Record<Status, string> = {
-  pending: "border-amber-200 bg-amber-50 text-amber-800",
-  processing: "border-blue-200 bg-blue-50 text-blue-800",
-  complete: "border-green-200 bg-green-50 text-green-800",
-  canceled: "border-slate-200 bg-slate-50 text-slate-600",
-};
+import type { HelpdeskRequest, Site, Staff, Status } from "@/types";
 
 const COLUMNS = ["Site", "Ref", "Title", "Priority", "Status", "Assignee", "Created", "Due"];
 
@@ -27,10 +15,12 @@ interface Props {
   statusLabels: Map<Status, string>;
   loading: boolean;
   failed?: boolean;
+  hrefFor: (request: HelpdeskRequest) => string;
   now?: Date;
 }
 
-export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, now = new Date() }: Props) {
+export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, hrefFor, now = new Date() }: Props) {
+  const navigate = useNavigate();
   return (
     <Table>
       <TableHeader>
@@ -56,24 +46,26 @@ export function BoardTable({ rows, sites, staff, statusLabels, loading, failed, 
               // Rule 3: names come from /v1/staff by id, never from the stale assignee.name.
               const assignee = r.assignee ? (staff.get(r.assignee.id)?.name ?? "Unknown staff") : null;
               const overdue = isOverdue(r, zone, now);
+              const href = hrefFor(r);
               return (
-                <TableRow key={r.id}>
+                <TableRow
+                  key={r.id}
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    if (!(e.target as HTMLElement).closest("a")) navigate(href);
+                  }}>
                   <TableCell>{site?.name ?? `Site ${r.site_id}`}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.ref}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <Link to={href} className="underline-offset-2 hover:underline focus-visible:underline" aria-label={`Open ${r.ref}: ${r.title}`}>
+                      {r.ref}
+                    </Link>
+                  </TableCell>
                   <TableCell className="min-w-48 whitespace-normal">{r.title}</TableCell>
                   <TableCell>
-                    {r.priority ? (
-                      <Badge variant="outline" className={cn(PRIORITY_STYLES[r.priority])}>
-                        {r.priority}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">No priority</span>
-                    )}
+                    <PriorityBadge priority={r.priority} />
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn(STATUS_STYLES[r.status])}>
-                      {statusLabels.get(r.status) ?? r.status}
-                    </Badge>
+                    <StatusBadge status={r.status} labels={statusLabels} />
                   </TableCell>
                   <TableCell>{assignee ?? <span className="text-muted-foreground">Unassigned</span>}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{formatInZone(r.created_at, zone)}</TableCell>

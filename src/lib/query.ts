@@ -100,7 +100,7 @@ export function serializeQuery(
   if (query.status) params.set("status", query.status);
   if (query.sort !== DEFAULT_QUERY.sort) params.set("sort", query.sort);
   if (query.size !== DEFAULT_PAGE_SIZE) params.set("size", String(query.size));
-  if (query.page > 1) params.set("page", String(query.page));
+  params.set("page", String(query.page));
   const text = params.toString();
   return text ? `?${text}` : "";
 }

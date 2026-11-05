@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useLocation, useMatch, useNavigate } from "react-router-dom";
 import {
   BOARD_PATH,
   parseQuery,
@@ -14,16 +15,12 @@ type Range = { from: string; to: string };
  * is written to the URL as soon as it is known.
  */
 export function useBoardQuery(fallbackRange: Range | null) {
-  const [query, setQuery] = useState<BoardQuery>(() =>
-    parseQuery(window.location.search),
-  );
-
-  // Any change goes back to page 1, unless the patch itself sets the page.
-  const update = useCallback(
-    (patch: Partial<BoardQuery>) =>
-      setQuery((q) => ({ ...q, page: 1, ...patch })),
-    [],
-  );
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const query = useMemo(() => parseQuery(search), [search]);
+  const onBoard = useMatch(BOARD_PATH) !== null;
+  const onRequest = useMatch("/requests/:id") !== null;
+  const active = onBoard || onRequest;
 
   const range: Range | null =
     query.from && query.to ? { from: query.from, to: query.to } : fallbackRange;
@@ -31,21 +28,25 @@ export function useBoardQuery(fallbackRange: Range | null) {
   const to = range?.to;
 
   useEffect(() => {
+    if (!active) return;
     const next = serializeQuery(query, from && to ? { from, to } : null);
-    if (
-      window.location.pathname !== BOARD_PATH ||
-      next !== window.location.search
-    ) {
-      window.history.replaceState(null, "", `${BOARD_PATH}${next}`);
-    }
-  }, [query, from, to]);
+    if (next !== search) navigate({ pathname, search: next }, { replace: true });
+  }, [active, query, pathname, search, from, to, navigate]);
 
-  // Back/forward or a manually edited URL re-reads the state.
-  useEffect(() => {
-    const onPop = () => setQuery(parseQuery(window.location.search));
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  // Any change goes back to page 1, unless the patch itself sets the page.
+  const update = useCallback(
+    (patch: Partial<BoardQuery>) => {
+      const next = { ...query, page: 1, ...patch };
+      navigate(
+        {
+          pathname,
+          search: serializeQuery(next, from && to ? { from, to } : null),
+        },
+        { replace: true },
+      );
+    },
+    [query, pathname, from, to, navigate],
+  );
 
   return { query, update, range };
 }
